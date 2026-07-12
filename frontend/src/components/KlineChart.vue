@@ -2,18 +2,12 @@
 import { ref, watch, onMounted, onBeforeUnmount, computed } from 'vue'
 import * as echarts from 'echarts'
 import type { DailyQuote } from '@/types'
+import { buildIndicators } from '@/utils/indicators'
 
 const props = defineProps<{
   quotes: DailyQuote[]
-  indicators?: {
-    ma5?: (number | null)[]
-    ma10?: (number | null)[]
-    ma20?: (number | null)[]
-    ma60?: (number | null)[]
-    macd?: { dif: number[]; dea: number[]; macd: number[] }
-    rsi?: (number | null)[]
-    boll?: { mid: (number | null)[]; upper: (number | null)[]; lower: (number | null)[] }
-  } | null
+  /** @deprecated 日/周/月指标均按当前周期 K 线本地计算，此字段保留兼容 */
+  indicators?: unknown
   period?: 'day' | 'week' | 'month'
   showMa?: boolean
   showMacd?: boolean
@@ -24,17 +18,24 @@ const props = defineProps<{
 const chartRef = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
 
+function toLocalDateKey(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function aggregate(quotes: DailyQuote[], period: string): DailyQuote[] {
   if (period === 'day' || !quotes.length) return quotes
   const bucket = new Map<string, DailyQuote>()
   for (const q of quotes) {
-    const d = new Date(q.trade_date)
+    const d = new Date(q.trade_date + 'T00:00:00')
     let key: string
     if (period === 'week') {
       const day = d.getDay() || 7
       const monday = new Date(d)
       monday.setDate(d.getDate() - day + 1)
-      key = monday.toISOString().slice(0, 10)
+      key = toLocalDateKey(monday)
     } else {
       key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     }
@@ -54,11 +55,18 @@ function aggregate(quotes: DailyQuote[], period: string): DailyQuote[] {
 
 const seriesQuotes = computed(() => aggregate(props.quotes, props.period || 'day'))
 
+const chartIndicators = computed(() => {
+  const closes = seriesQuotes.value.map((q) => q.close)
+  if (!closes.length) return null
+  return buildIndicators(closes)
+})
+
 function render() {
   if (!chartRef.value || !seriesQuotes.value.length) return
   if (!chart) chart = echarts.init(chartRef.value, undefined, { renderer: 'canvas' })
 
   const data = seriesQuotes.value
+  const ind = chartIndicators.value
   const dates = data.map((d) => d.trade_date)
   const ohlc = data.map((d) => [d.open, d.close, d.low, d.high])
   const volumes = data.map((d) => d.volume)
@@ -120,19 +128,19 @@ function render() {
         yAxisIndex: 0,
         itemStyle: { color: upColor, color0: downColor, borderColor: upColor, borderColor0: downColor },
       },
-      ...(props.showMa && props.period === 'day' && props.indicators
+      ...(props.showMa && ind
         ? [
-            { name: 'MA5', type: 'line' as const, data: props.indicators.ma5, showSymbol: false, lineStyle: { width: 1, color: '#f5a524' }, xAxisIndex: 0, yAxisIndex: 0 },
-            { name: 'MA10', type: 'line' as const, data: props.indicators.ma10, showSymbol: false, lineStyle: { width: 1, color: '#38bdf8' }, xAxisIndex: 0, yAxisIndex: 0 },
-            { name: 'MA20', type: 'line' as const, data: props.indicators.ma20, showSymbol: false, lineStyle: { width: 1, color: '#a78bfa' }, xAxisIndex: 0, yAxisIndex: 0 },
-            { name: 'MA60', type: 'line' as const, data: props.indicators.ma60, showSymbol: false, lineStyle: { width: 1, color: '#fb7185' }, xAxisIndex: 0, yAxisIndex: 0 },
+            { name: 'MA5', type: 'line' as const, data: ind.ma5, showSymbol: false, lineStyle: { width: 1, color: '#f5a524' }, xAxisIndex: 0, yAxisIndex: 0 },
+            { name: 'MA10', type: 'line' as const, data: ind.ma10, showSymbol: false, lineStyle: { width: 1, color: '#38bdf8' }, xAxisIndex: 0, yAxisIndex: 0 },
+            { name: 'MA20', type: 'line' as const, data: ind.ma20, showSymbol: false, lineStyle: { width: 1, color: '#a78bfa' }, xAxisIndex: 0, yAxisIndex: 0 },
+            { name: 'MA60', type: 'line' as const, data: ind.ma60, showSymbol: false, lineStyle: { width: 1, color: '#fb7185' }, xAxisIndex: 0, yAxisIndex: 0 },
           ]
         : []),
-      ...(props.showBoll && props.period === 'day' && props.indicators?.boll
+      ...(props.showBoll && ind?.boll
         ? [
-            { name: 'BOLL上', type: 'line' as const, data: props.indicators.boll.upper, showSymbol: false, lineStyle: { width: 1, type: 'dashed' as const, color: '#94a3b8' }, xAxisIndex: 0, yAxisIndex: 0 },
-            { name: 'BOLL中', type: 'line' as const, data: props.indicators.boll.mid, showSymbol: false, lineStyle: { width: 1, color: '#64748b' }, xAxisIndex: 0, yAxisIndex: 0 },
-            { name: 'BOLL下', type: 'line' as const, data: props.indicators.boll.lower, showSymbol: false, lineStyle: { width: 1, type: 'dashed' as const, color: '#94a3b8' }, xAxisIndex: 0, yAxisIndex: 0 },
+            { name: 'BOLL上', type: 'line' as const, data: ind.boll.upper, showSymbol: false, lineStyle: { width: 1, type: 'dashed' as const, color: '#94a3b8' }, xAxisIndex: 0, yAxisIndex: 0 },
+            { name: 'BOLL中', type: 'line' as const, data: ind.boll.mid, showSymbol: false, lineStyle: { width: 1, color: '#64748b' }, xAxisIndex: 0, yAxisIndex: 0 },
+            { name: 'BOLL下', type: 'line' as const, data: ind.boll.lower, showSymbol: false, lineStyle: { width: 1, type: 'dashed' as const, color: '#94a3b8' }, xAxisIndex: 0, yAxisIndex: 0 },
           ]
         : []),
       {
@@ -145,25 +153,25 @@ function render() {
         xAxisIndex: 1,
         yAxisIndex: 1,
       },
-      ...(props.showMacd && props.period === 'day' && props.indicators?.macd
+      ...(props.showMacd && ind?.macd
         ? [
             {
               name: 'MACD',
               type: 'bar' as const,
-              data: props.indicators.macd.macd.map((v) => ({
+              data: ind.macd.macd.map((v) => ({
                 value: v,
                 itemStyle: { color: v >= 0 ? upColor : downColor, opacity: 0.7 },
               })),
               xAxisIndex: 2,
               yAxisIndex: 2,
             },
-            { name: 'DIF', type: 'line' as const, data: props.indicators.macd.dif, showSymbol: false, lineStyle: { width: 1, color: '#f5a524' }, xAxisIndex: 2, yAxisIndex: 2 },
-            { name: 'DEA', type: 'line' as const, data: props.indicators.macd.dea, showSymbol: false, lineStyle: { width: 1, color: '#38bdf8' }, xAxisIndex: 2, yAxisIndex: 2 },
+            { name: 'DIF', type: 'line' as const, data: ind.macd.dif, showSymbol: false, lineStyle: { width: 1, color: '#f5a524' }, xAxisIndex: 2, yAxisIndex: 2 },
+            { name: 'DEA', type: 'line' as const, data: ind.macd.dea, showSymbol: false, lineStyle: { width: 1, color: '#38bdf8' }, xAxisIndex: 2, yAxisIndex: 2 },
           ]
         : []),
-      ...(props.showRsi && !props.showMacd && props.period === 'day' && props.indicators?.rsi
+      ...(props.showRsi && !props.showMacd && ind?.rsi
         ? [
-            { name: 'RSI', type: 'line' as const, data: props.indicators.rsi, showSymbol: false, lineStyle: { width: 1.5, color: '#2dd4a8' }, xAxisIndex: 2, yAxisIndex: 2, markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed' as const, color: '#64748b' }, data: [{ yAxis: 70 }, { yAxis: 30 }] } },
+            { name: 'RSI', type: 'line' as const, data: ind.rsi, showSymbol: false, lineStyle: { width: 1.5, color: '#2dd4a8' }, xAxisIndex: 2, yAxisIndex: 2, markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed' as const, color: '#64748b' }, data: [{ yAxis: 70 }, { yAxis: 30 }] } },
           ]
         : []),
     ],
@@ -176,7 +184,7 @@ function onResize() {
   chart?.resize()
 }
 
-watch(() => [props.quotes, props.indicators, props.period, props.showMa, props.showMacd, props.showRsi, props.showBoll], render, { deep: true })
+watch(() => [props.quotes, props.period, props.showMa, props.showMacd, props.showRsi, props.showBoll], render, { deep: true })
 
 onMounted(() => {
   render()

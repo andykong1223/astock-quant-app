@@ -26,6 +26,12 @@ const router = createRouter({
           meta: { title: '选股', tab: 'screener' },
         },
         {
+          path: 'fund-flow',
+          name: 'fund-flow',
+          component: () => import('@/views/FundFlowView.vue'),
+          meta: { title: '板块资金', tab: 'fund-flow' },
+        },
+        {
           path: 'strategies',
           name: 'strategies',
           component: () => import('@/views/StrategiesView.vue'),

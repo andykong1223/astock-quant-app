@@ -8,6 +8,9 @@ import type {
   Strategy,
   BacktestResult,
   User,
+  SectorFundFlowResult,
+  StockNewsItem,
+  StockFundFlowResult,
 } from '@/types'
 
 export const authApi = {
@@ -37,6 +40,9 @@ export const stocksApi = {
     request<{ code: string; pre_close: number; points: { time: string; price: number; volume: number; avg: number }[] }>(
       api.get(`/stocks/${code}/intraday`),
     ),
+  news: (code: string, limit = 15) =>
+    request<StockNewsItem[]>(api.get(`/stocks/${code}/news`, { params: { limit } })),
+  fundFlow: (code: string) => request<StockFundFlowResult>(api.get(`/stocks/${code}/fund-flow`)),
 }
 
 export const watchlistApi = {
@@ -76,4 +82,9 @@ export const strategiesApi = {
   update: (id: string, payload: { name?: string; config?: Record<string, unknown> }) =>
     request<Strategy>(api.put(`/strategies/${id}`, payload)),
   remove: (id: string) => request(api.delete(`/strategies/${id}`)),
+}
+
+export const fundFlowApi = {
+  sectors: (params?: { type?: 'industry' | 'concept'; limit?: number }) =>
+    request<SectorFundFlowResult>(api.get('/fund-flow/sectors', { params })),
 }

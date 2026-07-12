@@ -29,7 +29,26 @@ api.interceptors.response.use(
     return res
   },
   (err) => {
-    const msg = err.response?.data?.message || err.message || '网络错误'
+    const status = err.response?.status
+    let msg = err.response?.data?.message || err.message || '网络错误'
+
+    // 兜底：避免偶发英文底层信息直接展示
+    if (/violates|duplicate key|PGRST|SQLSTATE|JWT|relation |permission denied/i.test(String(msg))) {
+      msg = status === 401 ? '登录已失效，请重新登录' : '操作失败，请稍后重试'
+    }
+    if (/timeout|Network Error|ECONNABORTED/i.test(String(msg))) {
+      msg = '网络异常，请稍后重试'
+    }
+
+    if (status === 401) {
+      sessionStorage.removeItem('astock_token')
+      sessionStorage.removeItem('astock_user')
+      const path = window.location.pathname + window.location.search
+      if (!path.startsWith('/login')) {
+        window.location.assign(`/login?redirect=${encodeURIComponent(path)}`)
+      }
+    }
+
     return Promise.reject(new Error(msg))
   },
 )

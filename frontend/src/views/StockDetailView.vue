@@ -16,14 +16,18 @@ import {
   NFormItem,
   useMessage,
   NIcon,
+  NEmpty,
 } from 'naive-ui'
 import { ArrowBackOutline, DownloadOutline, StarOutline } from '@vicons/ionicons5'
 import { stocksApi, quantApi, watchlistApi } from '@/api'
 import { useUserStore } from '@/stores/user'
-import type { Stock, DailyQuote, FinancialMetric, RealtimeQuote, BacktestResult } from '@/types'
+import type { Stock, DailyQuote, FinancialMetric, RealtimeQuote, BacktestResult, StockNewsItem, StockFundFlowResult } from '@/types'
 import PriceChange from '@/components/PriceChange.vue'
 import KlineChart from '@/components/KlineChart.vue'
 import IntradayChart from '@/components/IntradayChart.vue'
+import SignalAnalysisPanel from '@/components/SignalAnalysisPanel.vue'
+import StockNewsPanel from '@/components/StockNewsPanel.vue'
+import StockFundFlowPanel from '@/components/StockFundFlowPanel.vue'
 import * as echarts from 'echarts'
 import { onBeforeUnmount } from 'vue'
 
@@ -39,6 +43,10 @@ const quote = ref<RealtimeQuote | null>(null)
 const daily = ref<DailyQuote[]>([])
 const financial = ref<FinancialMetric[]>([])
 const indicators = ref<any>(null)
+const news = ref<StockNewsItem[]>([])
+const newsLoading = ref(false)
+const fundFlow = ref<StockFundFlowResult | null>(null)
+const fundFlowLoading = ref(false)
 const intraday = ref<{ time: string; price: number; volume: number; avg: number }[]>([])
 const preClose = ref(0)
 const tab = ref('overview')
@@ -57,16 +65,35 @@ let equityChart: echarts.ECharts | null = null
 
 const latestFin = computed(() => financial.value[0] || null)
 
+function n(v?: number | null, digits = 2) {
+  if (v == null || Number.isNaN(Number(v))) return '-'
+  return Number(v).toFixed(digits)
+}
+
+function reportLabel(type?: string) {
+  const map: Record<string, string> = {
+    Q1: '一季报',
+    Q3: '三季报',
+    HY: '中报',
+    YEAR: '年报',
+  }
+  return map[type || ''] || type || '-'
+}
+
 async function load() {
   loading.value = true
+  newsLoading.value = true
+  fundFlowLoading.value = true
   try {
-    const [s, q, d, f, ind, intra] = await Promise.all([
+    const [s, q, d, f, ind, intra, newsList, flow] = await Promise.all([
       stocksApi.get(code.value),
       stocksApi.realtime(code.value),
       stocksApi.daily(code.value, { limit: 300 }),
-      stocksApi.financial(code.value),
+      stocksApi.financial(code.value).catch(() => [] as FinancialMetric[]),
       quantApi.indicators(code.value),
       stocksApi.intraday(code.value),
+      stocksApi.news(code.value, 15).catch(() => [] as StockNewsItem[]),
+      stocksApi.fundFlow(code.value).catch(() => null),
     ])
     stock.value = s
     quote.value = q
@@ -75,10 +102,14 @@ async function load() {
     indicators.value = ind
     intraday.value = intra.points
     preClose.value = intra.pre_close
+    news.value = newsList
+    fundFlow.value = flow
   } catch (e) {
     message.error((e as Error).message)
   } finally {
     loading.value = false
+    newsLoading.value = false
+    fundFlowLoading.value = false
   }
 }
 
@@ -245,47 +276,48 @@ function pct(v?: number) {
               :show-boll="showBoll"
             />
           </div>
+          <SignalAnalysisPanel :quotes="daily" :news="news" :period="period" />
+          <StockNewsPanel :items="news.slice(0, 5)" :loading="newsLoading" />
           <h3 class="section-title">分时</h3>
           <div class="chart-panel">
             <IntradayChart :points="intraday" :pre-close="preClose" />
           </div>
         </NTabPane>
 
+        <NTabPane name="news" tab="资讯">
+          <StockNewsPanel :items="news" :loading="newsLoading" />
+        </NTabPane>
+
         <NTabPane name="financial" tab="财务">
-          <div v-if="latestFin" class="fin-grid fade-up">
-            <div class="fin-card"><span>PE (TTM)</span><b class="mono">{{ latestFin.pe_ttm.toFixed(2) }}</b></div>
-            <div class="fin-card"><span>PB</span><b class="mono">{{ latestFin.pb.toFixed(2) }}</b></div>
-            <div class="fin-card"><span>ROE</span><b class="mono">{{ latestFin.roe.toFixed(2) }}%</b></div>
-            <div class="fin-card"><span>EPS</span><b class="mono">{{ latestFin.eps.toFixed(2) }}</b></div>
-            <div class="fin-card"><span>营收</span><b class="mono">{{ fmtMoney(latestFin.revenue) }}</b></div>
-            <div class="fin-card"><span>净利润</span><b class="mono">{{ fmtMoney(latestFin.net_profit) }}</b></div>
-            <div class="fin-card"><span>毛利率</span><b class="mono">{{ latestFin.gross_margin.toFixed(2) }}%</b></div>
-            <div class="fin-card"><span>净利率</span><b class="mono">{{ latestFin.net_margin.toFixed(2) }}%</b></div>
+          <div v-if="loading" class="fin-loading">
+            <NSpin size="small" />
+            <span>加载财务数据…</span>
           </div>
-          <p class="hint">报告期：{{ latestFin?.report_date }} · {{ latestFin?.report_type }}</p>
+          <template v-else-if="latestFin">
+            <div class="fin-grid fade-up">
+              <div class="fin-card"><span>PE (TTM)</span><b class="mono">{{ n(latestFin.pe_ttm) }}</b></div>
+              <div class="fin-card"><span>PB</span><b class="mono">{{ n(latestFin.pb) }}</b></div>
+              <div class="fin-card"><span>ROE</span><b class="mono">{{ n(latestFin.roe) }}%</b></div>
+              <div class="fin-card"><span>EPS</span><b class="mono">{{ n(latestFin.eps) }}</b></div>
+              <div class="fin-card"><span>营收</span><b class="mono">{{ fmtMoney(latestFin.revenue) }}</b></div>
+              <div class="fin-card"><span>净利润</span><b class="mono">{{ fmtMoney(latestFin.net_profit) }}</b></div>
+              <div class="fin-card"><span>毛利率</span><b class="mono">{{ n(latestFin.gross_margin) }}%</b></div>
+              <div class="fin-card"><span>净利率</span><b class="mono">{{ n(latestFin.net_margin) }}%</b></div>
+            </div>
+            <p class="hint">报告期：{{ latestFin.report_date }} · {{ reportLabel(latestFin.report_type) }}</p>
+            <div v-if="financial.length > 1" class="fin-history">
+              <h3 class="section-title">历史报告期</h3>
+              <div v-for="row in financial.slice(0, 6)" :key="row.report_date" class="fin-hist-row">
+                <span>{{ row.report_date }} · {{ reportLabel(row.report_type) }}</span>
+                <span class="mono">营收 {{ fmtMoney(row.revenue) }}</span>
+              </div>
+            </div>
+          </template>
+          <NEmpty v-else description="暂无财务数据，请稍后重试" />
         </NTabPane>
 
         <NTabPane name="flow" tab="资金">
-          <div class="flow-panel fade-up">
-            <p class="hint">主力资金流向（演示估算）</p>
-            <NGrid :cols="2" :x-gap="12" :y-gap="12">
-              <NGi>
-                <div class="fin-card">
-                  <span>主力净流入</span>
-                  <b class="mono price-up">+{{ fmtMoney((quote?.amount || 0) * 0.12) }}</b>
-                </div>
-              </NGi>
-              <NGi>
-                <div class="fin-card">
-                  <span>主力净流出</span>
-                  <b class="mono price-down">-{{ fmtMoney((quote?.amount || 0) * 0.08) }}</b>
-                </div>
-              </NGi>
-              <NGi><div class="fin-card"><span>大单</span><b>42%</b></div></NGi>
-              <NGi><div class="fin-card"><span>中单</span><b>31%</b></div></NGi>
-              <NGi><div class="fin-card"><span>小单</span><b>27%</b></div></NGi>
-            </NGrid>
-          </div>
+          <StockFundFlowPanel :data="fundFlow" :loading="fundFlowLoading" />
         </NTabPane>
 
         <NTabPane name="backtest" tab="回测">
@@ -437,6 +469,40 @@ function pct(v?: number) {
   }
   b {
     font-size: 18px;
+  }
+}
+.fin-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.fin-history {
+  margin-top: 8px;
+}
+.fin-hist-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  background: rgba(18, 26, 43, 0.6);
+  font-size: 13px;
+  color: var(--text-secondary);
+
+  &:first-of-type {
+    border-radius: 10px 10px 0 0;
+  }
+  &:last-child {
+    border-bottom: 1px solid var(--border);
+    border-radius: 0 0 10px 10px;
+  }
+  .mono {
+    color: var(--text-primary);
   }
 }
 .hint {

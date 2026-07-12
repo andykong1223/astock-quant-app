@@ -22,6 +22,7 @@ function formatVol(v?: number) {
 }
 
 const hasData = computed(() => props.items.length > 0)
+const gridClass = computed(() => (props.removable ? 'with-action' : ''))
 
 function open(code: string) {
   router.push(`/stock/${code}`)
@@ -37,68 +38,81 @@ function open(code: string) {
     </div>
     <NEmpty v-else-if="!hasData" description="暂无自选股" />
     <template v-else>
-      <div class="list-head">
+      <div class="list-head" :class="gridClass">
         <span>名称/代码</span>
         <span>现价</span>
         <span>涨跌幅</span>
+        <span v-if="removable" class="col-action-head">操作</span>
       </div>
-      <button
+      <div
         v-for="item in items"
         :key="item.id"
         class="quote-row fade-up"
+        :class="gridClass"
+        role="button"
+        tabindex="0"
         @click="open(item.stock_code)"
+        @keydown.enter="open(item.stock_code)"
       >
         <div class="col-name">
           <div class="name">{{ item.stock?.name || item.stock_code }}</div>
           <div class="code mono">{{ item.stock_code }}</div>
         </div>
-        <div class="col-price mono" :class="{ 'price-up': (item.quote?.change || 0) > 0, 'price-down': (item.quote?.change || 0) < 0 }">
+        <div
+          class="col-price mono"
+          :class="{
+            'price-up': (item.quote?.change || 0) > 0,
+            'price-down': (item.quote?.change || 0) < 0,
+          }"
+        >
           {{ item.quote?.price?.toFixed(2) ?? '-' }}
         </div>
         <div class="col-chg">
           <PriceChange :value="item.quote?.change_percent || 0" suffix="%" />
           <div class="vol">量 {{ formatVol(item.quote?.volume) }}</div>
         </div>
-        <NButton
-          v-if="removable"
-          size="tiny"
-          quaternary
-          type="error"
-          class="rm-btn"
-          @click.stop="emit('remove', item.id)"
-        >
-          删除
-        </NButton>
-      </button>
+        <div v-if="removable" class="col-action" @click.stop>
+          <NButton size="small" quaternary type="error" @click="emit('remove', item.id)">
+            删除
+          </NButton>
+        </div>
+      </div>
     </template>
   </div>
 </template>
 
 <style scoped lang="scss">
-.list-head {
+.list-head,
+.quote-row {
   display: grid;
-  grid-template-columns: 1fr 88px 88px;
+  grid-template-columns: minmax(0, 1fr) 84px 88px;
   gap: 8px;
-  padding: 8px 12px;
+  align-items: center;
+  padding: 12px 14px;
+
+  &.with-action {
+    grid-template-columns: minmax(0, 1fr) 84px 88px 56px;
+  }
+}
+
+.list-head {
+  padding-top: 8px;
+  padding-bottom: 8px;
   font-size: 12px;
   color: var(--text-muted);
 }
 
+.col-action-head {
+  text-align: center;
+}
+
 .quote-row {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1fr 88px 88px;
-  gap: 8px;
-  align-items: center;
-  padding: 12px;
   min-height: 64px;
-  border: none;
   border-bottom: 1px solid var(--border);
   background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
-  position: relative;
   transition: background 0.15s;
 
   &:active,
@@ -110,6 +124,9 @@ function open(code: string) {
 .name {
   font-weight: 600;
   font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .code {
@@ -134,10 +151,10 @@ function open(code: string) {
   margin-top: 2px;
 }
 
-.rm-btn {
-  position: absolute;
-  right: 8px;
-  top: 8px;
+.col-action {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .skel-row {

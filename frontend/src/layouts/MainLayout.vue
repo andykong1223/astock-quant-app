@@ -7,6 +7,7 @@ import {
   SearchOutline,
   PulseOutline,
   PersonOutline,
+  SwapVerticalOutline,
 } from '@vicons/ionicons5'
 import { NIcon } from 'naive-ui'
 
@@ -17,6 +18,7 @@ const app = useAppStore()
 const tabs = [
   { key: 'home', label: '自选', path: '/', icon: StatsChartOutline },
   { key: 'screener', label: '选股', path: '/screener', icon: SearchOutline },
+  { key: 'fund-flow', label: '资金', path: '/fund-flow', icon: SwapVerticalOutline },
   { key: 'strategies', label: '策略', path: '/strategies', icon: PulseOutline },
   { key: 'settings', label: '我的', path: '/settings', icon: PersonOutline },
 ]

@@ -13,9 +13,13 @@ declare module 'vue' {
   export interface GlobalComponents {
     IntradayChart: typeof import('./components/IntradayChart.vue')['default']
     KlineChart: typeof import('./components/KlineChart.vue')['default']
+    NEmpty: typeof import('naive-ui')['NEmpty']
     PriceChange: typeof import('./components/PriceChange.vue')['default']
     QuoteList: typeof import('./components/QuoteList.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SignalAnalysisPanel: typeof import('./components/SignalAnalysisPanel.vue')['default']
+    StockFundFlowPanel: typeof import('./components/StockFundFlowPanel.vue')['default']
+    StockNewsPanel: typeof import('./components/StockNewsPanel.vue')['default']
   }
 }

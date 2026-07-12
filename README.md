@@ -70,14 +70,25 @@ Base URL: `/api/v1`
 
 统一响应：`{ code: 0, message: "success", data: ... }`
 
-## 脚本
+## 行情数据源
+
+默认接入公开行情（无需 Key）：
+
+| 用途 | 来源 |
+|------|------|
+| A 股列表 / 实时 | 东方财富 `push2delay` |
+| 日 K 线 | 腾讯财经 `fqkline` |
 
 ```bash
-npm run dev          # 同时启动前后端
-npm run dev:web      # 仅前端
-npm run dev:server   # 仅后端
-npm run build        # 构建
+# 全量同步股票列表 + 实时（约 1–2 分钟）
+npm run sync:market --workspace=backend
+
+# 或 HTTP
+curl -X POST http://localhost:3000/api/v1/sync/universe
+curl http://localhost:3000/api/v1/sync/status
 ```
+
+个股日线会在首次打开详情且本地过期时自动补齐。
 
 ## 适配说明
 

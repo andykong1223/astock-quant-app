@@ -9,6 +9,8 @@ import { stocksRouter } from './routes/stocks.js'
 import { watchlistRouter } from './routes/watchlist.js'
 import { quantRouter } from './routes/quant.js'
 import { strategiesRouter } from './routes/strategies.js'
+import { syncRouter } from './routes/sync.js'
+import { fundFlowRouter } from './routes/fundFlow.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { startCronJobs } from './jobs/cron.js'
 
@@ -40,6 +42,8 @@ app.use('/api/v1/stocks', stocksRouter)
 app.use('/api/v1/watchlist', watchlistRouter)
 app.use('/api/v1/quant', quantRouter)
 app.use('/api/v1/strategies', strategiesRouter)
+app.use('/api/v1/sync', syncRouter)
+app.use('/api/v1/fund-flow', fundFlowRouter)
 
 app.use(errorHandler)
 

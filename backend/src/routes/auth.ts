@@ -1,9 +1,10 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { ok, AppError } from '../middleware/errorHandler.js'
+import { dbFail } from '../utils/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { demoUsers } from '../services/demoData.js'
-import { getSupabaseAdmin } from '../services/supabase.js'
+import { getSupabaseAdmin, getSupabaseAnon } from '../services/supabase.js'
 import { randomUUID } from 'crypto'
 
 export const authRouter = Router()
@@ -36,24 +37,28 @@ authRouter.post('/register', async (req, res, next) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
-    const { data, error } = await supabase.auth.admin.createUser({
+    const supabaseAdmin = getSupabaseAdmin()
+    const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email: body.email,
       password: body.password,
       email_confirm: true,
       user_metadata: { username: body.username },
     })
-    if (error) throw new AppError(error.message, 400)
+    if (error) throw dbFail(error, '操作失败', 400)
 
+    // 登录会话必须用 publishable/anon client，避免 secret key 干扰 JWT
+    const supabase = getSupabaseAnon()
     const { data: session, error: loginErr } = await supabase.auth.signInWithPassword({
       email: body.email,
       password: body.password,
     })
-    if (loginErr) throw new AppError(loginErr.message, 400)
+    if (loginErr || !session.session?.access_token) {
+      throw dbFail(loginErr, '注册成功但自动登录失败，请手动登录', 400)
+    }
 
     return ok(res, {
       user: { id: data.user.id, email: data.user.email, username: body.username },
-      token: session.session?.access_token,
+      token: session.session.access_token,
     })
   } catch (err) {
     next(err)
@@ -73,12 +78,14 @@ authRouter.post('/login', async (req, res, next) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
+    const supabase = getSupabaseAnon()
     const { data, error } = await supabase.auth.signInWithPassword({
       email: body.email,
       password: body.password,
     })
-    if (error) throw new AppError('邮箱或密码错误', 401, 401)
+    if (error || !data.session?.access_token) {
+      throw new AppError('邮箱或密码错误', 401, 401)
+    }
 
     return ok(res, {
       user: {
@@ -109,9 +116,9 @@ authRouter.post('/reset-password', async (req, res, next) => {
       return ok(res, null, '演示模式：重置邮件已模拟发送')
     }
 
-    const supabase = getSupabaseAdmin()
+    const supabase = getSupabaseAnon()
     const { error } = await supabase.auth.resetPasswordForEmail(email)
-    if (error) throw new AppError(error.message, 400)
+    if (error) throw dbFail(error, '操作失败', 400)
     return ok(res, null, '重置邮件已发送')
   } catch (err) {
     next(err)
@@ -159,7 +166,7 @@ authRouter.put('/profile', requireAuth, async (req, res, next) => {
       .eq('id', req.user!.id)
       .select()
       .single()
-    if (error) throw new AppError(error.message, 400)
+    if (error) throw dbFail(error, '操作失败', 400)
     return ok(res, data)
   } catch (err) {
     next(err)

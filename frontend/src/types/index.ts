@@ -101,3 +101,67 @@ export interface BacktestResult {
   trades?: { date: string; side: string; price: number; shares: number; equity: number }[]
   error?: string
 }
+
+export interface SectorFundFlowItem {
+  code: string
+  name: string
+  price: number
+  change_percent: number
+  main_net_inflow: number
+  main_net_ratio: number
+  super_net_inflow: number
+  large_net_inflow: number
+  medium_net_inflow: number
+  small_net_inflow: number
+}
+
+export interface SectorFundFlowResult {
+  board_type: 'industry' | 'concept'
+  trade_date: string
+  updated_at: string
+  inflow: SectorFundFlowItem[]
+  outflow: SectorFundFlowItem[]
+}
+
+export interface StockNewsItem {
+  id: string
+  title: string
+  summary: string
+  url: string
+  published_at: string
+  source: string
+  type: 'news' | 'announcement'
+}
+
+export interface StockFundFlowToday {
+  stock_code: string
+  name: string
+  trade_date: string
+  updated_at: string
+  main_net_inflow: number
+  main_net_ratio: number
+  super_net_inflow: number
+  super_net_ratio: number
+  large_net_inflow: number
+  large_net_ratio: number
+  medium_net_inflow: number
+  medium_net_ratio: number
+  small_net_inflow: number
+  small_net_ratio: number
+}
+
+export interface StockFundFlowDay {
+  trade_date: string
+  main_net_inflow: number
+  main_net_ratio: number
+  super_net_inflow: number
+  large_net_inflow: number
+  medium_net_inflow: number
+  small_net_inflow: number
+  close: number
+}
+
+export interface StockFundFlowResult {
+  today: StockFundFlowToday
+  history: StockFundFlowDay[]
+}

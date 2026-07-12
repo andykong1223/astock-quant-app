@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
 import { ok, AppError } from '../middleware/errorHandler.js'
+import { dbFail } from '../utils/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import {
   demoWatchlist,
@@ -35,17 +36,38 @@ watchlistRouter.get('/', async (req, res, next) => {
     }
 
     const supabase = getSupabaseAdmin()
-    const { data: groups } = await supabase
+    const { data: groups, error: gErr } = await supabase
       .from('watchlist_groups')
       .select('*')
       .eq('user_id', userId)
       .order('sort_order')
-    const { data: items } = await supabase
+    if (gErr) throw dbFail(gErr, '获取分组失败')
+
+    // 不要嵌套 realtime_quotes：watchlist_items 与其无直接外键，会导致整表查询失败并返回空
+    const { data: items, error: iErr } = await supabase
       .from('watchlist_items')
-      .select('*, stock:stocks(*), quote:realtime_quotes(*)')
+      .select('*, stock:stocks(*)')
       .eq('user_id', userId)
       .order('sort_order')
-    return ok(res, { groups: groups || [], items: items || [] })
+    if (iErr) throw dbFail(iErr, '获取自选股失败')
+
+    const codes = (items || []).map((i) => i.stock_code).filter(Boolean)
+    let quoteMap = new Map<string, Record<string, unknown>>()
+    if (codes.length) {
+      const { data: quotes, error: qErr } = await supabase
+        .from('realtime_quotes')
+        .select('*')
+        .in('stock_code', codes)
+      if (qErr) throw dbFail(qErr, '获取行情失败')
+      quoteMap = new Map((quotes || []).map((q) => [q.stock_code, q]))
+    }
+
+    const enriched = (items || []).map((item) => ({
+      ...item,
+      quote: quoteMap.get(item.stock_code) || null,
+    }))
+
+    return ok(res, { groups: groups || [], items: enriched })
   } catch (err) {
     next(err)
   }
@@ -86,7 +108,7 @@ watchlistRouter.post('/', async (req, res, next) => {
       .insert({ user_id: userId, stock_code: body.stock_code, group_id: body.group_id })
       .select()
       .single()
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '添加自选失败')
     return ok(res, data)
   } catch (err) {
     next(err)
@@ -111,7 +133,7 @@ watchlistRouter.delete('/:itemId', async (req, res, next) => {
       .delete()
       .eq('id', itemId)
       .eq('user_id', userId)
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '删除自选失败')
     return ok(res, null, '已删除')
   } catch (err) {
     next(err)
@@ -145,7 +167,7 @@ watchlistRouter.put('/:itemId/move', async (req, res, next) => {
       .eq('user_id', userId)
       .select()
       .single()
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '移动自选失败')
     return ok(res, data)
   } catch (err) {
     next(err)
@@ -164,7 +186,7 @@ watchlistRouter.get('/groups', async (req, res, next) => {
       .select('*')
       .eq('user_id', userId)
       .order('sort_order')
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '获取分组失败')
     return ok(res, data)
   } catch (err) {
     next(err)
@@ -196,7 +218,7 @@ watchlistRouter.post('/groups', async (req, res, next) => {
       .insert({ user_id: userId, name })
       .select()
       .single()
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '创建分组失败')
     return ok(res, data)
   } catch (err) {
     next(err)
@@ -224,7 +246,7 @@ watchlistRouter.put('/groups/:groupId', async (req, res, next) => {
       .eq('user_id', userId)
       .select()
       .single()
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '修改分组失败')
     return ok(res, data)
   } catch (err) {
     next(err)
@@ -252,7 +274,7 @@ watchlistRouter.delete('/groups/:groupId', async (req, res, next) => {
       .delete()
       .eq('id', groupId)
       .eq('user_id', userId)
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '删除分组失败')
     return ok(res, null, '已删除')
   } catch (err) {
     next(err)

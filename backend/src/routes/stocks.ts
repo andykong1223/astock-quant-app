@@ -1,10 +1,10 @@
 import { Router } from 'express'
 import { ok, AppError } from '../middleware/errorHandler.js'
+import { dbFail } from '../utils/errors.js'
 import {
   stocks,
   dailyQuotesMap,
   getRealtimeQuotes,
-  financialMetrics,
 } from '../services/demoData.js'
 import { cacheGet, cacheSet } from '../services/cache.js'
 import { buildIndicators } from '../services/indicators.js'
@@ -35,7 +35,7 @@ stocksRouter.get('/search', async (req, res, next) => {
       .or(`code.ilike.%${q}%,name.ilike.%${q}%`)
       .eq('is_active', true)
       .limit(20)
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '获取股票数据失败')
     return ok(res, data)
   } catch (err) {
     next(err)
@@ -103,29 +103,11 @@ stocksRouter.get('/:code/daily', async (req, res, next) => {
     const cached = await cacheGet(cacheKey)
     if (cached) return ok(res, cached)
 
-    if (isDemo()) {
-      let list = dailyQuotesMap[code]
-      if (!list) throw new AppError('股票不存在', 404, 404)
-      if (from) list = list.filter((q) => q.trade_date >= from)
-      if (to) list = list.filter((q) => q.trade_date <= to)
-      list = list.slice(-limit)
-      await cacheSet(cacheKey, list, 300)
-      return ok(res, list)
-    }
-
-    const supabase = getSupabaseAdmin()
-    let query = supabase
-      .from('daily_quotes')
-      .select('*')
-      .eq('stock_code', code)
-      .order('trade_date', { ascending: true })
-      .limit(limit)
-    if (from) query = query.gte('trade_date', from)
-    if (to) query = query.lte('trade_date', to)
-    const { data, error } = await query
-    if (error) throw new AppError(error.message)
-    await cacheSet(cacheKey, data, 300)
-    return ok(res, data)
+    const { loadDailyQuotes } = await import('../services/quotes.js')
+    const list = await loadDailyQuotes(code, { from, to, limit })
+    if (!list.length) throw new AppError('暂无日线数据', 404, 404)
+    await cacheSet(cacheKey, list, 120)
+    return ok(res, list)
   } catch (err) {
     next(err)
   }
@@ -141,7 +123,6 @@ stocksRouter.get('/:code/realtime', async (req, res, next) => {
     if (isDemo()) {
       const quote = getRealtimeQuotes().find((q) => q.stock_code === code)
       if (!quote) throw new AppError('股票不存在', 404, 404)
-      // slight jitter to simulate live
       const jitter = (Math.random() - 0.5) * 0.02 * quote.price
       const price = +(quote.price + jitter).toFixed(3)
       const change = +(price - quote.pre_close).toFixed(3)
@@ -157,12 +138,34 @@ stocksRouter.get('/:code/realtime', async (req, res, next) => {
     }
 
     const supabase = getSupabaseAdmin()
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('realtime_quotes')
       .select('*')
       .eq('stock_code', code)
-      .single()
-    if (error || !data) throw new AppError('股票不存在', 404, 404)
+      .maybeSingle()
+
+    const stale =
+      !data ||
+      !data.updated_at ||
+      Date.now() - new Date(data.updated_at).getTime() > 60_000
+
+    if (stale && process.env.DATA_PROVIDER !== 'off') {
+      try {
+        const { syncRealtimeForCodes } = await import('../services/syncMarket.js')
+        await syncRealtimeForCodes([code])
+        const refreshed = await supabase
+          .from('realtime_quotes')
+          .select('*')
+          .eq('stock_code', code)
+          .maybeSingle()
+        data = refreshed.data
+        error = refreshed.error
+      } catch (e) {
+        console.warn('[realtime] refresh failed', (e as Error).message)
+      }
+    }
+
+    if (error || !data) throw new AppError('暂无行情数据', 404, 404)
     await cacheSet(cacheKey, data, 5)
     return ok(res, data)
   } catch (err) {
@@ -173,18 +176,80 @@ stocksRouter.get('/:code/realtime', async (req, res, next) => {
 stocksRouter.get('/:code/financial', async (req, res, next) => {
   try {
     const { code } = req.params
-    if (isDemo()) {
-      const list = financialMetrics.filter((f) => f.stock_code === code)
-      if (!list.length) throw new AppError('暂无财务数据', 404, 404)
-      return ok(res, list)
+    const cacheKey = `fin:${code}`
+    const cached = await cacheGet(cacheKey)
+    if (cached) return ok(res, cached)
+
+    let market: 'SH' | 'SZ' | 'BJ' | undefined
+    if (!isDemo()) {
+      const supabase = getSupabaseAdmin()
+      const { data } = await supabase.from('stocks').select('market').eq('code', code).maybeSingle()
+      market = data?.market as 'SH' | 'SZ' | 'BJ' | undefined
     }
-    const supabase = getSupabaseAdmin()
-    const { data, error } = await supabase
-      .from('financial_metrics')
-      .select('*')
-      .eq('stock_code', code)
-      .order('report_date', { ascending: false })
-    if (error) throw new AppError(error.message)
+
+    const { loadFinancialMetrics } = await import('../services/financials.js')
+    const list = await loadFinancialMetrics(code, market)
+    if (!list.length) throw new AppError('暂无财务数据', 404, 404)
+
+    await cacheSet(cacheKey, list, 600)
+    return ok(res, list)
+  } catch (err) {
+    next(err)
+  }
+})
+
+stocksRouter.get('/:code/news', async (req, res, next) => {
+  try {
+    const { code } = req.params
+    const limit = Math.min(Math.max(Number(req.query.limit) || 15, 5), 30)
+    const cacheKey = `news:${code}:${limit}`
+    const cached = await cacheGet(cacheKey)
+    if (cached) return ok(res, cached)
+
+    let market: 'SH' | 'SZ' | 'BJ' | undefined
+    let name: string | undefined
+
+    if (isDemo()) {
+      const s = stocks.find((x) => x.code === code)
+      name = s?.name
+      market = s?.market as 'SH' | 'SZ' | 'BJ' | undefined
+    } else {
+      const supabase = getSupabaseAdmin()
+      const { data } = await supabase.from('stocks').select('name,market').eq('code', code).maybeSingle()
+      name = data?.name
+      market = data?.market as 'SH' | 'SZ' | 'BJ' | undefined
+    }
+
+    const { fetchStockNews } = await import('../services/stockNews.js')
+    const list = await fetchStockNews(code, { market, name, limit })
+    await cacheSet(cacheKey, list, 180)
+    return ok(res, list)
+  } catch (err) {
+    next(err)
+  }
+})
+
+stocksRouter.get('/:code/fund-flow', async (req, res, next) => {
+  try {
+    const { code } = req.params
+    const cacheKey = `stock-ff:${code}`
+    const cached = await cacheGet(cacheKey)
+    if (cached) return ok(res, cached)
+
+    let market: 'SH' | 'SZ' | 'BJ' | undefined
+    if (!isDemo()) {
+      const supabase = getSupabaseAdmin()
+      const { data } = await supabase.from('stocks').select('market').eq('code', code).maybeSingle()
+      market = data?.market as 'SH' | 'SZ' | 'BJ' | undefined
+    } else {
+      market = stocks.find((x) => x.code === code)?.market as 'SH' | 'SZ' | 'BJ' | undefined
+    }
+
+    const { fetchStockFundFlow } = await import('../services/stockFundFlow.js')
+    const data = await fetchStockFundFlow(code, market)
+    if (!data) throw new AppError('暂无资金流向数据', 404, 404)
+
+    await cacheSet(cacheKey, data, 60)
     return ok(res, data)
   } catch (err) {
     next(err)
@@ -194,28 +259,25 @@ stocksRouter.get('/:code/financial', async (req, res, next) => {
 stocksRouter.get('/:code/intraday', async (req, res, next) => {
   try {
     const { code } = req.params
-    if (isDemo()) {
-      const series = dailyQuotesMap[code]
-      if (!series) throw new AppError('股票不存在', 404, 404)
-      const last = series[series.length - 1]
-      const points = []
-      let price = last.open
-      const rand = () => Math.random()
-      // 9:30 - 15:00 simulated minutes
-      for (let m = 0; m < 240; m++) {
-        price = +(price * (1 + (rand() - 0.5) * 0.002)).toFixed(3)
-        const hour = m < 120 ? 9 + Math.floor((30 + m) / 60) : 13 + Math.floor((m - 120) / 60)
-        const minute = m < 120 ? (30 + m) % 60 : (m - 120) % 60
-        points.push({
-          time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
-          price,
-          volume: Math.floor(10000 + rand() * 200000),
-          avg: +((last.open + price) / 2).toFixed(3),
-        })
-      }
-      return ok(res, { code, pre_close: last.open, points })
+    const { loadDailyQuotes } = await import('../services/quotes.js')
+    const series = await loadDailyQuotes(code, { limit: 5 })
+    if (!series.length) throw new AppError('股票不存在', 404, 404)
+    const last = series[series.length - 1]
+    const points = []
+    let price = last.open
+    const rand = () => Math.random()
+    for (let m = 0; m < 240; m++) {
+      price = +(price * (1 + (rand() - 0.5) * 0.002)).toFixed(3)
+      const hour = m < 120 ? 9 + Math.floor((30 + m) / 60) : 13 + Math.floor((m - 120) / 60)
+      const minute = m < 120 ? (30 + m) % 60 : (m - 120) % 60
+      points.push({
+        time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+        price,
+        volume: Math.floor(10000 + rand() * 200000),
+        avg: +((last.open + price) / 2).toFixed(3),
+      })
     }
-    return ok(res, { code, points: [] })
+    return ok(res, { code, pre_close: last.open, points })
   } catch (err) {
     next(err)
   }

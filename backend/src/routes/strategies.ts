@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
 import { ok, AppError } from '../middleware/errorHandler.js'
+import { dbFail } from '../utils/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { demoStrategies } from '../services/demoData.js'
 import { getSupabaseAdmin } from '../services/supabase.js'
@@ -25,7 +26,7 @@ strategiesRouter.get('/', async (req, res, next) => {
       .select('*')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '策略操作失败')
     return ok(res, data)
   } catch (err) {
     next(err)
@@ -62,7 +63,7 @@ strategiesRouter.post('/', async (req, res, next) => {
       .insert({ user_id: userId, name: body.name, config: body.config })
       .select()
       .single()
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '策略操作失败')
     return ok(res, data)
   } catch (err) {
     next(err)
@@ -118,7 +119,7 @@ strategiesRouter.put('/:id', async (req, res, next) => {
       .eq('user_id', userId)
       .select()
       .single()
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '策略操作失败')
     return ok(res, data)
   } catch (err) {
     next(err)
@@ -140,7 +141,7 @@ strategiesRouter.delete('/:id', async (req, res, next) => {
       .delete()
       .eq('id', req.params.id)
       .eq('user_id', userId)
-    if (error) throw new AppError(error.message)
+    if (error) throw dbFail(error, '策略操作失败')
     return ok(res, null, '已删除')
   } catch (err) {
     next(err)

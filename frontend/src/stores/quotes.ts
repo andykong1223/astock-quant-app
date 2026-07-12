@@ -46,7 +46,7 @@ export const useWatchlistStore = defineStore('watchlist', () => {
   }
 
   async function addStock(code: string, groupId?: string | null) {
-    await watchlistApi.add(code, groupId)
+    await watchlistApi.add(code, groupId ?? null)
     await fetchWatchlist()
   }
 
