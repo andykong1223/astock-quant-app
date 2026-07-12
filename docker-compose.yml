@@ -2,12 +2,16 @@
 # 用法：
 #   cp .env.docker.example .env.docker   # 填写密钥
 #   ./scripts/deploy.sh up
+#
+# 镜像默认走国内源（DOCKER_REGISTRY，见 .env.docker）
 
 services:
   api:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
     container_name: astock-api
     restart: unless-stopped
     env_file:
@@ -33,6 +37,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
         VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}
@@ -49,7 +54,7 @@ services:
       - astock
 
   redis:
-    image: redis:7-alpine
+    image: ${DOCKER_REGISTRY:-docker.m.daocloud.io}/library/redis:7-alpine
     container_name: astock-redis
     restart: unless-stopped
     profiles: ["redis"]

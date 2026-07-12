@@ -96,12 +96,21 @@ curl http://localhost:3000/api/v1/sync/status
 ## Docker 部署
 
 ```bash
-# 1. 生成环境配置并填写 Supabase 密钥
-./scripts/deploy.sh init
-# 编辑 .env.docker
+# 1. （推荐）配置 Docker Hub 国内加速
+./scripts/deploy.sh mirror
 
-# 2. 构建并启动（默认 http://localhost ）
+# 2. 生成环境配置并填写 Supabase 密钥
+./scripts/deploy.sh init
+# 编辑 .env.docker（含 DOCKER_REGISTRY=docker.m.daocloud.io）
+
+# 3. 构建并启动（默认 http://localhost ；会先 git pull）
 ./scripts/deploy.sh up
+
+# 仅拉取代码
+./scripts/deploy.sh pull
+
+# 本地已改代码、不想 pull 时：
+# SKIP_GIT_PULL=1 ./scripts/deploy.sh up
 
 # 可选：启用 Redis
 ./scripts/deploy.sh up-redis
@@ -112,14 +121,24 @@ curl http://localhost:3000/api/v1/sync/status
 ./scripts/deploy.sh down
 ```
 
+构建默认走国内源：
+
+| 类型 | 源 |
+|------|-----|
+| 基础镜像 | `docker.m.daocloud.io/library/...`（可用 `DOCKER_REGISTRY` 改） |
+| npm | `https://registry.npmmirror.com` |
+| apt | 阿里云 Debian 镜像 |
+
 | 文件 | 说明 |
 |------|------|
 | `docker-compose.yml` | web(nginx) + api(+可选 redis) |
 | `backend/Dockerfile` | API 多阶段构建 |
 | `frontend/Dockerfile` | 前端构建 + Nginx |
 | `deploy/nginx/default.conf` | `/api` 反代到后端 |
+| `deploy/docker-daemon-mirror.json` | Docker Hub 加速配置 |
 | `.env.docker.example` | 生产环境变量模板 |
 | `scripts/deploy.sh` | 本地/服务器部署 |
+| `scripts/setup-docker-mirror.sh` | 写入 daemon 镜像加速 |
 | `scripts/remote-deploy.sh` | `git pull` 后重新部署 |
 
 服务器更新：
