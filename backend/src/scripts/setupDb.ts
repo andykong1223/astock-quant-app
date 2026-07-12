@@ -12,18 +12,20 @@ import { createClient } from '@supabase/supabase-js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.resolve(__dirname, '../../.env') })
 
-const url = process.env.SUPABASE_URL
-const secret = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
-const databaseUrl = process.env.DATABASE_URL
+function mustEnv(name: string, value: string | undefined): string {
+  if (!value) {
+    console.error(`[db] Missing ${name} in backend/.env`)
+    process.exit(1)
+  }
+  return value
+}
 
-if (!url || !secret) {
-  console.error('[db] Missing SUPABASE_URL or SUPABASE_SECRET_KEY in backend/.env')
-  process.exit(1)
-}
-if (!databaseUrl) {
-  console.error('[db] Missing DATABASE_URL in backend/.env')
-  process.exit(1)
-}
+const supabaseUrl = mustEnv('SUPABASE_URL', process.env.SUPABASE_URL)
+const supabaseSecret = mustEnv(
+  'SUPABASE_SECRET_KEY',
+  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
+)
+const dbUrl = mustEnv('DATABASE_URL', process.env.DATABASE_URL)
 
 async function runSqlFiles(client: pg.Client) {
   const root = path.resolve(__dirname, '../../../supabase')
@@ -93,7 +95,7 @@ const BASE: Record<string, number> = {
 }
 
 async function seedQuotes() {
-  const supabase = createClient(url, secret, {
+  const supabase = createClient(supabaseUrl, supabaseSecret, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
@@ -167,10 +169,10 @@ async function seedQuotes() {
 }
 
 async function main() {
-  console.log('[db] connecting', databaseUrl.replace(/:[^:@/]+@/, ':***@'))
+  console.log('[db] connecting', dbUrl.replace(/:[^:@/]+@/, ':***@'))
 
   const client = new pg.Client({
-    connectionString: databaseUrl,
+    connectionString: dbUrl,
     ssl: { rejectUnauthorized: false },
   })
   await client.connect()

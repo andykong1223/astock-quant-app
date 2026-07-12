@@ -1,4 +1,4 @@
-import Redis from 'ioredis'
+import { Redis } from 'ioredis'
 
 let redis: Redis | null = null
 const memoryCache = new Map<string, { value: string; expireAt: number }>()
@@ -16,7 +16,7 @@ export function getRedis(): Redis | null {
     lazyConnect: true,
     maxRetriesPerRequest: 1,
   })
-  redis.on('error', (err) => console.warn('[Redis]', err.message))
+  redis.on('error', (err: Error) => console.warn('[Redis]', err.message))
   return redis
 }
 

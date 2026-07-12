@@ -33,7 +33,7 @@ function zodMessage(err: ZodError): string {
   const label = fieldLabel[field] || field
   const code = first.code
 
-  if (field === 'email' && (code === 'invalid_string' || code === 'invalid_format')) {
+  if (field === 'email' && (code === 'invalid_string' || String(code) === 'invalid_format')) {
     return '请输入正确的邮箱地址'
   }
   if (field === 'password' && code === 'too_small') return '密码长度至少 6 位'

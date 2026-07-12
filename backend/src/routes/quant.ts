@@ -94,7 +94,8 @@ quantRouter.post('/backtest', requireAuth, async (req, res, next) => {
 
 quantRouter.get('/backtest/:taskId', requireAuth, async (req, res, next) => {
   try {
-    const task = backtestTasks.get(req.params.taskId)
+    const taskId = String(req.params.taskId)
+    const task = backtestTasks.get(taskId)
     if (!task) throw new AppError('任务不存在', 404, 404)
     return ok(res, task)
   } catch (err) {
