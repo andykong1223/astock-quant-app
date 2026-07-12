@@ -2,11 +2,12 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import PriceChange from './PriceChange.vue'
-import type { WatchlistItem } from '@/types'
+import type { WatchlistItem, StockAdvice } from '@/types'
 import { NButton, NEmpty, NSkeleton } from 'naive-ui'
 
 const props = defineProps<{
   items: WatchlistItem[]
+  adviceByCode?: Record<string, StockAdvice>
   loading?: boolean
   removable?: boolean
 }>()
@@ -19,6 +20,17 @@ function formatVol(v?: number) {
   if (v >= 1e8) return `${(v / 1e8).toFixed(2)}亿`
   if (v >= 1e4) return `${(v / 1e4).toFixed(1)}万`
   return String(v)
+}
+
+function adviceOf(code: string) {
+  return props.adviceByCode?.[code] || null
+}
+
+function adviceClass(action?: string) {
+  if (action === 'strong_buy' || action === 'buy') return 'buy'
+  if (action === 'strong_sell' || action === 'sell') return 'sell'
+  if (action === 'hold') return 'hold'
+  return ''
 }
 
 const hasData = computed(() => props.items.length > 0)
@@ -42,6 +54,7 @@ function open(code: string) {
         <span>名称/代码</span>
         <span>现价</span>
         <span>涨跌幅</span>
+        <span class="col-advice-head">建议</span>
         <span v-if="removable" class="col-action-head">操作</span>
       </div>
       <div
@@ -71,6 +84,16 @@ function open(code: string) {
           <PriceChange :value="item.quote?.change_percent || 0" suffix="%" />
           <div class="vol">量 {{ formatVol(item.quote?.volume) }}</div>
         </div>
+        <div class="col-advice">
+          <span
+            v-if="adviceOf(item.stock_code)"
+            class="advice-tag"
+            :class="adviceClass(adviceOf(item.stock_code)?.action)"
+          >
+            {{ adviceOf(item.stock_code)?.action_label }}
+          </span>
+          <span v-else class="advice-empty">-</span>
+        </div>
         <div v-if="removable" class="col-action" @click.stop>
           <NButton size="small" quaternary type="error" @click="emit('remove', item.id)">
             删除
@@ -85,13 +108,13 @@ function open(code: string) {
 .list-head,
 .quote-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 84px 88px;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1.1fr) 72px 78px 72px;
+  gap: 6px;
   align-items: center;
   padding: 12px 14px;
 
   &.with-action {
-    grid-template-columns: minmax(0, 1fr) 84px 88px 56px;
+    grid-template-columns: minmax(0, 1.1fr) 72px 78px 72px 52px;
   }
 }
 
@@ -102,6 +125,7 @@ function open(code: string) {
   color: var(--text-muted);
 }
 
+.col-advice-head,
 .col-action-head {
   text-align: center;
 }
@@ -151,6 +175,42 @@ function open(code: string) {
   margin-top: 2px;
 }
 
+.col-advice {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.advice-tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  white-space: nowrap;
+
+  &.buy {
+    color: var(--up);
+    background: color-mix(in srgb, var(--up) 16%, transparent);
+  }
+  &.sell {
+    color: var(--down);
+    background: color-mix(in srgb, var(--down) 16%, transparent);
+  }
+  &.hold {
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+}
+
+.advice-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .col-action {
   display: flex;
   justify-content: center;
@@ -160,5 +220,23 @@ function open(code: string) {
 .skel-row {
   padding: 16px 12px;
   border-bottom: 1px solid var(--border);
+}
+
+@media (max-width: 380px) {
+  .list-head,
+  .quote-row {
+    grid-template-columns: minmax(0, 1fr) 64px 70px 64px;
+    padding-left: 10px;
+    padding-right: 10px;
+
+    &.with-action {
+      grid-template-columns: minmax(0, 1fr) 60px 66px 60px 44px;
+    }
+  }
+
+  .advice-tag {
+    font-size: 10px;
+    padding: 2px 4px;
+  }
 }
 </style>

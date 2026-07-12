@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AdviceBacktestPanel: typeof import('./components/AdviceBacktestPanel.vue')['default']
     IntradayChart: typeof import('./components/IntradayChart.vue')['default']
     KlineChart: typeof import('./components/KlineChart.vue')['default']
     NEmpty: typeof import('naive-ui')['NEmpty']

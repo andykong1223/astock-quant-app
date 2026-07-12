@@ -156,7 +156,13 @@ onMounted(() => store.fetchWatchlist())
     </div>
 
     <div class="panel">
-      <QuoteList :items="filteredItems" :loading="store.loading" removable @remove="remove" />
+      <QuoteList
+        :items="filteredItems"
+        :advice-by-code="store.adviceByCode"
+        :loading="store.loading"
+        removable
+        @remove="remove"
+      />
     </div>
 
     <NModal

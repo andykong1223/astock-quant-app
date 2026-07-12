@@ -26,6 +26,7 @@ import PriceChange from '@/components/PriceChange.vue'
 import KlineChart from '@/components/KlineChart.vue'
 import IntradayChart from '@/components/IntradayChart.vue'
 import SignalAnalysisPanel from '@/components/SignalAnalysisPanel.vue'
+import AdviceBacktestPanel from '@/components/AdviceBacktestPanel.vue'
 import StockNewsPanel from '@/components/StockNewsPanel.vue'
 import StockFundFlowPanel from '@/components/StockFundFlowPanel.vue'
 import * as echarts from 'echarts'
@@ -318,6 +319,10 @@ function pct(v?: number) {
 
         <NTabPane name="flow" tab="资金">
           <StockFundFlowPanel :data="fundFlow" :loading="fundFlowLoading" />
+        </NTabPane>
+
+        <NTabPane name="advice-bt" tab="建议收益">
+          <AdviceBacktestPanel :quotes="daily" :active="tab === 'advice-bt'" />
         </NTabPane>
 
         <NTabPane name="backtest" tab="回测">

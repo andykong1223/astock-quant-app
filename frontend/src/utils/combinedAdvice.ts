@@ -41,7 +41,11 @@ export function analyzeCombined(
   const newsResult = analyzeNewsSentiment(news)
   const techScore = tech.score
   const newsScore = newsResult.score
-  const combined = +(techScore * 0.65 + newsScore * 0.35).toFixed(2)
+  // 无资讯时完全按技术面，与详情「仅技术」及自选列表一致
+  const hasNews = news.length > 0
+  const combined = hasNews
+    ? +(techScore * 0.65 + newsScore * 0.35).toFixed(2)
+    : techScore
   const action = actionFromScore(combined)
 
   const aligned =

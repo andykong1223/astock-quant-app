@@ -135,6 +135,65 @@ async function loadClosesFromDb(codes: string[], minBars = 30) {
   return closesMap
 }
 
+quantRouter.get('/advice', optionalAuth, async (req, res, next) => {
+  try {
+    const codes = String(req.query.codes || '')
+      .split(',')
+      .map((c) => c.trim())
+      .filter((c) => /^\d{6}$/.test(c))
+      .slice(0, 50)
+
+    if (!codes.length) return ok(res, [])
+
+    const cacheKey = `advice:${codes.slice().sort().join(',')}`
+    const cached = await cacheGet(cacheKey)
+    if (cached) return ok(res, cached)
+
+    const { computeAdvice } = await import('../services/advice.js')
+    const result: Array<{
+      code: string
+      action: string
+      action_label: string
+      score: number
+    }> = []
+
+    if (isDemo()) {
+      for (const code of codes) {
+        const closes = (dailyQuotesMap[code] || []).map((q) => q.close)
+        const advice = computeAdvice(code, closes)
+        if (advice) result.push(advice)
+      }
+    } else {
+      const closesMap = await loadClosesFromDb(codes, 30)
+      for (const code of codes) {
+        if (closesMap.has(code)) continue
+        try {
+          const quotes = await loadDailyQuotes(code, { limit: 120 })
+          if (quotes.length >= 30) {
+            closesMap.set(
+              code,
+              quotes.map((q) => q.close),
+            )
+          }
+        } catch {
+          // ignore single-code failure
+        }
+      }
+      for (const code of codes) {
+        const closes = closesMap.get(code)
+        if (!closes?.length) continue
+        const advice = computeAdvice(code, closes)
+        if (advice) result.push(advice)
+      }
+    }
+
+    await cacheSet(cacheKey, result, 120)
+    return ok(res, result)
+  } catch (err) {
+    next(err)
+  }
+})
+
 quantRouter.get('/screener', optionalAuth, async (req, res, next) => {
   try {
     const indicator = String(req.query.indicator || 'rsi')

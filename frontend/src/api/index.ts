@@ -11,6 +11,7 @@ import type {
   SectorFundFlowResult,
   StockNewsItem,
   StockFundFlowResult,
+  StockAdvice,
 } from '@/types'
 
 export const authApi = {
@@ -70,6 +71,8 @@ export const quantApi = {
     request<BacktestResult & { status: string; error?: string }>(api.get(`/quant/backtest/${taskId}`)),
   screener: (params: { indicator: string; op: string; value: number }) =>
     request(api.get('/quant/screener', { params })),
+  advice: (codes: string[]) =>
+    request<StockAdvice[]>(api.get('/quant/advice', { params: { codes: codes.join(',') } })),
   exportUrl: (code: string) =>
     `${import.meta.env.VITE_API_BASE_URL || '/api/v1'}/quant/export/${code}`,
 }

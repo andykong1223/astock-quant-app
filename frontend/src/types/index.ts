@@ -133,6 +133,13 @@ export interface StockNewsItem {
   type: 'news' | 'announcement'
 }
 
+export interface StockAdvice {
+  code: string
+  action: 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell'
+  action_label: string
+  score: number
+}
+
 export interface StockFundFlowToday {
   stock_code: string
   name: string

@@ -10,46 +10,13 @@ const props = defineProps<{
   period?: 'day' | 'week' | 'month'
 }>()
 
-function aggregate(quotes: DailyQuote[], period: string): DailyQuote[] {
-  if (period === 'day' || !quotes.length) return quotes
-  const bucket = new Map<string, DailyQuote>()
-  for (const q of quotes) {
-    const d = new Date(q.trade_date + 'T00:00:00')
-    let key: string
-    if (period === 'week') {
-      const day = d.getDay() || 7
-      const monday = new Date(d)
-      monday.setDate(d.getDate() - day + 1)
-      key = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
-    } else {
-      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    }
-    const prev = bucket.get(key)
-    if (!prev) bucket.set(key, { ...q, trade_date: key })
-    else {
-      prev.high = Math.max(prev.high, q.high)
-      prev.low = Math.min(prev.low, q.low)
-      prev.close = q.close
-      prev.volume += q.volume
-      prev.amount += q.amount
-    }
-  }
-  return [...bucket.values()]
-}
-
-const analysis = computed(() => {
-  const bars = aggregate(props.quotes, props.period || 'day')
-  return analyzeCombined(
-    bars.map((q) => q.close),
+/** 建议统一按日K + 资讯计算，与自选列表一致 */
+const analysis = computed(() =>
+  analyzeCombined(
+    props.quotes.map((q) => q.close),
     props.news || [],
-  )
-})
-
-const periodLabel = computed(() => {
-  if (props.period === 'week') return '周K'
-  if (props.period === 'month') return '月K'
-  return '日K'
-})
+  ),
+)
 
 function actionClass(action: ActionAdvice) {
   if (action === 'strong_buy' || action === 'buy') return 'buy'
@@ -78,7 +45,7 @@ function fmtSigned(n: number) {
   <div class="signal-panel fade-up">
     <div class="signal-head">
       <h3 class="section-title">综合研判</h3>
-      <span class="period-tag">{{ periodLabel }} + 资讯舆情</span>
+      <span class="period-tag">日K + 资讯舆情</span>
     </div>
 
     <div v-if="!analysis" class="empty">日线数据不足，暂无法生成分析</div>
@@ -95,13 +62,19 @@ function fmtSigned(n: number) {
       <div class="score-break">
         <div>
           <span>技术面</span>
-          <b class="mono" :class="biasClass(analysis.techScore >= 0.5 ? 'bullish' : analysis.techScore <= -0.5 ? 'bearish' : 'neutral')">
+          <b
+            class="mono"
+            :class="biasClass(analysis.techScore >= 0.5 ? 'bullish' : analysis.techScore <= -0.5 ? 'bearish' : 'neutral')"
+          >
             {{ fmtSigned(analysis.techScore) }}
           </b>
         </div>
         <div>
           <span>资讯舆情</span>
-          <b class="mono" :class="biasClass(analysis.newsScore >= 0.5 ? 'bullish' : analysis.newsScore <= -0.5 ? 'bearish' : 'neutral')">
+          <b
+            class="mono"
+            :class="biasClass(analysis.newsScore >= 0.5 ? 'bullish' : analysis.newsScore <= -0.5 ? 'bearish' : 'neutral')"
+          >
             {{ fmtSigned(analysis.newsScore) }}
           </b>
         </div>
@@ -156,7 +129,7 @@ function fmtSigned(n: number) {
       </section>
 
       <p class="disclaimer">
-        舆情为关键词规则评分，非大模型解读；综合建议仅供参考，不构成投资建议。
+        建议收益为历史模拟，不含手续费/滑点；舆情不参与回放。仅供参考，不构成投资建议。
       </p>
     </template>
   </div>

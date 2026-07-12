@@ -81,7 +81,11 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="panel fade-up">
-      <QuoteList :items="store.sortedItems" :loading="store.loading" />
+      <QuoteList
+        :items="store.sortedItems"
+        :advice-by-code="store.adviceByCode"
+        :loading="store.loading"
+      />
     </div>
   </div>
 </template>
