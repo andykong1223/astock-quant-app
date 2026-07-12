@@ -44,8 +44,11 @@ astock-quant-app/
 ├── frontend/          # Vue 3 应用
 ├── backend/           # Express API
 ├── supabase/          # Schema & Seed
-├── package.json       # monorepo workspaces
-└── .env.example
+├── deploy/nginx/      # 生产 Nginx 配置
+├── scripts/           # 部署脚本
+├── docker-compose.yml
+├── .env.example
+└── .env.docker.example
 ```
 
 ## 主要功能
@@ -89,6 +92,41 @@ curl http://localhost:3000/api/v1/sync/status
 ```
 
 个股日线会在首次打开详情且本地过期时自动补齐。
+
+## Docker 部署
+
+```bash
+# 1. 生成环境配置并填写 Supabase 密钥
+./scripts/deploy.sh init
+# 编辑 .env.docker
+
+# 2. 构建并启动（默认 http://localhost ）
+./scripts/deploy.sh up
+
+# 可选：启用 Redis
+./scripts/deploy.sh up-redis
+
+# 常用
+./scripts/deploy.sh logs
+./scripts/deploy.sh ps
+./scripts/deploy.sh down
+```
+
+| 文件 | 说明 |
+|------|------|
+| `docker-compose.yml` | web(nginx) + api(+可选 redis) |
+| `backend/Dockerfile` | API 多阶段构建 |
+| `frontend/Dockerfile` | 前端构建 + Nginx |
+| `deploy/nginx/default.conf` | `/api` 反代到后端 |
+| `.env.docker.example` | 生产环境变量模板 |
+| `scripts/deploy.sh` | 本地/服务器部署 |
+| `scripts/remote-deploy.sh` | `git pull` 后重新部署 |
+
+服务器更新：
+
+```bash
+./scripts/remote-deploy.sh
+```
 
 ## 适配说明
 

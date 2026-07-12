@@ -8,7 +8,10 @@
     "dev:web": "npm run dev --workspace=frontend",
     "dev:server": "npm run dev --workspace=backend",
     "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
-    "install:all": "npm install"
+    "install:all": "npm install",
+    "docker:up": "./scripts/deploy.sh up",
+    "docker:down": "./scripts/deploy.sh down",
+    "docker:logs": "./scripts/deploy.sh logs"
   },
   "workspaces": [
     "frontend",

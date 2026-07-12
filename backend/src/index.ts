@@ -47,8 +47,8 @@ app.use('/api/v1/fund-flow', fundFlowRouter)
 
 app.use(errorHandler)
 
-app.listen(PORT, () => {
-  console.log(`[AStock Quant] API listening on http://localhost:${PORT}`)
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[AStock Quant] API listening on http://0.0.0.0:${PORT}`)
   console.log(`[AStock Quant] Demo mode: ${process.env.DEMO_MODE === 'true'}`)
   startCronJobs()
 })
