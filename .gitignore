@@ -1,0 +1,20 @@
+# Root
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+
+# Frontend
+frontend/dist/
+frontend/node_modules/
+
+# Backend
+backend/dist/
+backend/node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
