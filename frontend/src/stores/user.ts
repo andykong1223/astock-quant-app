@@ -2,16 +2,22 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '@/api'
 import type { User } from '@/types'
-
-const TOKEN_KEY = 'astock_token'
-const USER_KEY = 'astock_user'
+import {
+  getToken,
+  getRefreshToken,
+  getStoredUserRaw,
+  setAuthSession,
+  setUserRaw,
+  clearAuthSession,
+} from '@/utils/authStorage'
 
 export const useUserStore = defineStore('user', () => {
-  const token = ref<string | null>(sessionStorage.getItem(TOKEN_KEY))
+  const token = ref<string | null>(getToken())
+  const refreshToken = ref<string | null>(getRefreshToken())
   const user = ref<User | null>(
     (() => {
       try {
-        const raw = sessionStorage.getItem(USER_KEY)
+        const raw = getStoredUserRaw()
         return raw ? (JSON.parse(raw) as User) : null
       } catch {
         return null
@@ -22,25 +28,25 @@ export const useUserStore = defineStore('user', () => {
 
   const isLoggedIn = computed(() => !!token.value && !!user.value)
 
-  function persist(t: string, u: User) {
+  function persist(t: string, u: User, refresh?: string | null) {
     token.value = t
     user.value = u
-    sessionStorage.setItem(TOKEN_KEY, t)
-    sessionStorage.setItem(USER_KEY, JSON.stringify(u))
+    if (refresh !== undefined) refreshToken.value = refresh
+    setAuthSession(t, JSON.stringify(u), refresh === undefined ? undefined : refresh)
   }
 
   function clear() {
     token.value = null
+    refreshToken.value = null
     user.value = null
-    sessionStorage.removeItem(TOKEN_KEY)
-    sessionStorage.removeItem(USER_KEY)
+    clearAuthSession()
   }
 
   async function login(email: string, password: string) {
     loading.value = true
     try {
       const data = await authApi.login(email, password)
-      persist(data.token, data.user)
+      persist(data.token, data.user, data.refresh_token ?? null)
       return data.user
     } finally {
       loading.value = false
@@ -51,7 +57,7 @@ export const useUserStore = defineStore('user', () => {
     loading.value = true
     try {
       const data = await authApi.register(email, password, username)
-      persist(data.token, data.user)
+      persist(data.token, data.user, data.refresh_token ?? null)
       return data.user
     } finally {
       loading.value = false
@@ -71,7 +77,7 @@ export const useUserStore = defineStore('user', () => {
     try {
       const me = await authApi.me()
       user.value = me
-      sessionStorage.setItem(USER_KEY, JSON.stringify(me))
+      setUserRaw(JSON.stringify(me))
       return me
     } catch {
       clear()
@@ -79,5 +85,5 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  return { token, user, loading, isLoggedIn, login, register, logout, fetchMe, clear }
+  return { token, refreshToken, user, loading, isLoggedIn, login, register, logout, fetchMe, clear, persist }
 })

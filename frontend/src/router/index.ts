@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getToken } from '@/utils/authStorage'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -76,7 +77,7 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   document.title = `${to.meta.title || 'AStock Quant'} · A股量化`
-  const token = sessionStorage.getItem('astock_token')
+  const token = getToken()
   if (to.meta.auth && !token) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }

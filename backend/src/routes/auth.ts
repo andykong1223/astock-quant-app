@@ -34,6 +34,8 @@ authRouter.post('/register', async (req, res, next) => {
       return ok(res, {
         user: { id: user.id, email: user.email, username: user.username },
         token: user.token,
+        refresh_token: user.token,
+        expires_in: 60 * 60 * 24 * 30,
       })
     }
 
@@ -59,6 +61,8 @@ authRouter.post('/register', async (req, res, next) => {
     return ok(res, {
       user: { id: data.user.id, email: data.user.email, username: body.username },
       token: session.session.access_token,
+      refresh_token: session.session.refresh_token,
+      expires_in: session.session.expires_in,
     })
   } catch (err) {
     next(err)
@@ -75,6 +79,8 @@ authRouter.post('/login', async (req, res, next) => {
       return ok(res, {
         user: { id: user.id, email: user.email, username: user.username, avatar_url: user.avatar_url },
         token: user.token,
+        refresh_token: user.token,
+        expires_in: 60 * 60 * 24 * 30,
       })
     }
 
@@ -94,6 +100,40 @@ authRouter.post('/login', async (req, res, next) => {
         username: data.user.user_metadata?.username,
       },
       token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      expires_in: data.session.expires_in,
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
+authRouter.post('/refresh', async (req, res, next) => {
+  try {
+    const body = z.object({ refresh_token: z.string().min(1) }).parse(req.body)
+
+    if (process.env.DEMO_MODE === 'true') {
+      const user = demoUsers.find((u) => u.token === body.refresh_token)
+      if (!user) throw new AppError('登录已失效，请重新登录', 401, 401)
+      return ok(res, {
+        token: user.token,
+        refresh_token: user.token,
+        expires_in: 60 * 60 * 24 * 30,
+      })
+    }
+
+    const supabase = getSupabaseAnon()
+    const { data, error } = await supabase.auth.refreshSession({
+      refresh_token: body.refresh_token,
+    })
+    if (error || !data.session?.access_token) {
+      throw new AppError('登录已失效，请重新登录', 401, 401)
+    }
+
+    return ok(res, {
+      token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      expires_in: data.session.expires_in,
     })
   } catch (err) {
     next(err)

@@ -13,6 +13,7 @@ import {
 } from 'naive-ui'
 import { useUserStore } from '@/stores/user'
 import { authApi } from '@/api'
+import { setUserRaw } from '@/utils/authStorage'
 
 const user = useUserStore()
 const router = useRouter()
@@ -24,7 +25,7 @@ async function saveProfile() {
   try {
     const u = await authApi.updateProfile({ username: username.value })
     user.user = u
-    sessionStorage.setItem('astock_user', JSON.stringify(u))
+    setUserRaw(JSON.stringify(u))
     message.success('资料已更新')
   } catch (e) {
     message.error((e as Error).message)

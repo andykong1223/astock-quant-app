@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NForm,
@@ -7,19 +7,40 @@ import {
   NInput,
   NButton,
   NCard,
+  NCheckbox,
   useMessage,
 } from 'naive-ui'
 import { useUserStore } from '@/stores/user'
+import {
+  loadSavedCredentials,
+  saveCredentials,
+  clearSavedCredentials,
+} from '@/utils/authStorage'
 
 const user = useUserStore()
 const router = useRouter()
 const message = useMessage()
-const email = ref('demo@astock.com')
-const password = ref('demo123456')
+const email = ref('')
+const password = ref('')
+const remember = ref(false)
+
+onMounted(() => {
+  const saved = loadSavedCredentials()
+  if (saved) {
+    email.value = saved.email
+    password.value = saved.password
+    remember.value = true
+  }
+})
 
 async function submit() {
   try {
     await user.login(email.value, password.value)
+    if (remember.value) {
+      saveCredentials(email.value, password.value)
+    } else {
+      clearSavedCredentials()
+    }
     message.success('登录成功')
     const redirect = (router.currentRoute.value.query.redirect as string) || '/'
     router.replace(redirect)
@@ -42,17 +63,33 @@ async function submit() {
       </div>
       <NForm @submit.prevent="submit">
         <NFormItem label="邮箱">
-          <NInput v-model:value="email" type="text" placeholder="email" size="large" />
+          <NInput
+            v-model:value="email"
+            type="text"
+            placeholder="请输入邮箱"
+            size="large"
+            autocomplete="username"
+          />
         </NFormItem>
         <NFormItem label="密码">
-          <NInput v-model:value="password" type="password" show-password-on="click" size="large" />
+          <NInput
+            v-model:value="password"
+            type="password"
+            show-password-on="click"
+            size="large"
+            placeholder="请输入密码"
+            autocomplete="current-password"
+          />
         </NFormItem>
+        <div class="row">
+          <NCheckbox v-model:checked="remember">记住密码</NCheckbox>
+        </div>
         <NButton type="primary" block size="large" :loading="user.loading" attr-type="submit">
           登录
         </NButton>
       </NForm>
       <div class="footer">
-        <span>演示账号已预填</span>
+        <span />
         <RouterLink to="/register">注册账号</RouterLink>
       </div>
     </NCard>
@@ -106,6 +143,9 @@ async function submit() {
   border-radius: 12px;
   background: linear-gradient(160deg, #2dd4a8, #0d9488);
   box-shadow: 0 0 28px rgba(45, 212, 168, 0.4);
+}
+.row {
+  margin: -4px 0 16px;
 }
 .footer {
   display: flex;

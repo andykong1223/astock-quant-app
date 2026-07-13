@@ -14,12 +14,21 @@ import type {
   StockAdvice,
 } from '@/types'
 
+export type AuthSession = {
+  user: User
+  token: string
+  refresh_token?: string | null
+  expires_in?: number | null
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
-    request<{ user: User; token: string }>(api.post('/auth/login', { email, password })),
+    request<AuthSession>(api.post('/auth/login', { email, password })),
   register: (email: string, password: string, username?: string) =>
-    request<{ user: User; token: string }>(
-      api.post('/auth/register', { email, password, username }),
+    request<AuthSession>(api.post('/auth/register', { email, password, username })),
+  refresh: (refresh_token: string) =>
+    request<{ token: string; refresh_token?: string; expires_in?: number }>(
+      api.post('/auth/refresh', { refresh_token }),
     ),
   logout: () => request(api.post('/auth/logout')),
   resetPassword: (email: string) => request(api.post('/auth/reset-password', { email })),
